@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listNotes, getNote, createNote, updateNote, deleteNote } from './api.js';
+import { listNotes, getNote, createNote, updateNote, deleteNote, fetchHealth, frontendId } from './api.js';
 
 const s = {
   page:  { fontFamily: 'system-ui, sans-serif', maxWidth: 720, margin: '2rem auto', padding: '0 1rem' },
@@ -7,7 +7,45 @@ const s = {
   input: { width: '100%', padding: '.5rem', marginBottom: '.5rem', boxSizing: 'border-box' },
   btn:   { padding: '.5rem 1rem', marginRight: '.5rem', cursor: 'pointer' },
   err:   { background: '#fee', border: '1px solid #f99', padding: '.75rem', borderRadius: 6 },
+  foot:  { marginTop: '2rem', paddingTop: '.75rem', borderTop: '1px solid #eee',
+           color: '#666', fontSize: '.8rem', fontFamily: 'ui-monospace, monospace' },
 };
+
+
+// Diagnostics bar: makes it visible from the browser which instance serves the
+// static files and which one answers the API. With a MIG behind a load balancer,
+// just reload to watch the backend change.
+function ServedBy() {
+  const [health, setHealth] = useState(null);
+  const [front, setFront]   = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  const probe = () => {
+    fetchHealth().then((h) => { setHealth(h); setFailed(false); })
+                 .catch(() => { setHealth(null); setFailed(true); });
+  };
+
+  useEffect(() => { frontendId().then(setFront); probe(); }, []);
+
+  const i = health?.instance;
+  const where = i && [i.zone ?? i.region, i.mig, i.revision].filter(Boolean).join(' · ');
+
+  return (
+    <footer style={s.foot}>
+      <span><strong>Frontend:</strong> {front ?? 'local/bucket'}</span>
+      {' — '}
+      <span>
+        <strong>API:</strong>{' '}
+        {failed ? 'no response'
+          : !i ? '…'
+          : `${i.name} (${i.ip}) · ${i.platform}${where ? ` · ${where}` : ''} · up ${i.uptimeSeconds}s`}
+      </span>
+      <button style={{ ...s.btn, padding: '.15rem .5rem', marginLeft: '.5rem' }} onClick={probe}>
+        refresh
+      </button>
+    </footer>
+  );
+}
 
 export default function App() {
   const [notes, setNotes]       = useState([]);
@@ -86,6 +124,8 @@ export default function App() {
               ))}
         </>
       )}
+
+      <ServedBy />
     </div>
   );
 }

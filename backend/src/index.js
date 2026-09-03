@@ -1,6 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import { createRepository } from './repository.js';
+import { resolveInstance } from './instance.js';
+
+const INSTANCE = await resolveInstance();
+console.log(JSON.stringify({ severity: 'INFO',
+  message: `Instance: ${INSTANCE.name} (${INSTANCE.platform})`, instance: INSTANCE }));
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -8,20 +13,33 @@ const PORT = process.env.PORT || 3000;
 app.set('trust proxy', true);
 
 // M6 narrows this to the bucket origin. M7 removes it entirely.
-app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }));
+// exposedHeaders lets the browser read X-Served-By when the frontend lives on a
+// different origin (bucket / separate Cloud Run service).
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*',
+  exposedHeaders: ['X-Served-By'],
+}));
 app.use(express.json());
+
+// Every response states which instance produced it. With the LB in front of the
+// MIG, a repeated `curl -I` shows the spread without touching /health.
+app.use((_req, res, next) => {
+  res.set('X-Served-By', INSTANCE.name);
+  next();
+});
 
 const repo = await createRepository();
 console.log(JSON.stringify({ severity: 'INFO', message: `Repository: ${repo.kind}` }));
 
 app.get('/health', async (_req, res) => {
+  const instance = { ...INSTANCE, uptimeSeconds: Math.round(process.uptime()) };
   try {
     await repo.ping();
-    res.json({ status: 'ok', storage: repo.kind });
+    res.json({ status: 'ok', storage: repo.kind, instance });
   } catch (err) {
     console.error(JSON.stringify({ severity: 'ERROR',
       message: 'health check failed', detail: err.message }));
-    res.status(503).json({ status: 'degraded' });
+    res.status(503).json({ status: 'degraded', storage: repo.kind, instance });
   }
 });
 
