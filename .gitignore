@@ -17,3 +17,10 @@ npm-debug.log*
 # Sistema operativo / editor
 .DS_Store
 Thumbs.db
+
+# Never commit cloud credentials or local configuration with real values
+*.json.key
+*-key.json
+service-account*.json
+terraform.tfvars
+.env.deploy
