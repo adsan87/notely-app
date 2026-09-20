@@ -1,11 +1,11 @@
-# Exercise 6 — who may do what
+# Exercise 7 — scale, watch, be told
 
-**What changes in the code:** nothing.
+**What changes in the code:** nothing. `GET /api/boom` (already in the code) fails on purpose so you
+can prove the error alert fires.
 
-**How it is deployed:** founders get the basic *Viewer* role (and the bucket's "convenience" grants
-are removed so they cannot read the PDFs); the IT person gets *Owner* in the console; the API runs as
-`notely-api@…` with two grants (the bucket, the secret) and the page as `notely-web@…` with none.
-The Compute Engine default service account loses its grants.
+**How it is deployed:** the API's instance limits (minimum 1, maximum 10 — scale *out* is automatic
+on Cloud Run); an uptime check on `/health` every minute; two alerts: *the app is down* (IT and
+the founder) and *users get 5xx errors* (IT). The policies are in `deploy/alerts/`.
 
-**Run it:** `bash deploy/exercise6.sh`. Console click-paths and the honest "how hard was it"
-answer: course document, Exercise 6.
+**Run it:** create the two e-mail notification channels in the console first, paste their names
+into `deploy/exercise7.sh`, then `bash deploy/exercise7.sh`. Course document, Exercise 7.
