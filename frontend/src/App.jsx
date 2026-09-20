@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
-import { listNotes, getNote, createNote, updateNote, deleteNote, fetchHealth, frontendId } from './api.js';
+import { useEffect, useRef, useState } from 'react';
+import { listNotes, getNote, createNote, updateNote, deleteNote, fetchHealth, frontendId,
+         uploadAttachment, attachmentUrl } from './api.js';
 
 const s = {
   page:  { fontFamily: 'system-ui, sans-serif', maxWidth: 720, margin: '2rem auto', padding: '0 1rem' },
@@ -79,6 +80,17 @@ export default function App() {
     await deleteNote(id); setSelected(null); await refresh();
   });
 
+  // Exercise 4: "Attach file" (PDF). A hidden <input type="file"> is opened by
+  // the button; on selection the file is posted to the API.
+  const fileInput = useRef(null);
+  const attach = guard(async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelected(await uploadAttachment(selected.id, file));
+    e.target.value = '';
+  });
+  const openAttachment = guard(async id => { window.open(await attachmentUrl(id), '_blank'); });
+
   return (
     <div style={s.page}>
       <h1>Notely</h1>
@@ -99,7 +111,19 @@ export default function App() {
           <h2>{selected.title}</h2>
           <p style={{ whiteSpace: 'pre-wrap' }}>{selected.body}</p>
           <small>Updated: {selected.updatedAt}</small>
+          {selected.attachment && (
+            <p style={{ marginTop: '.75rem' }}>
+              <strong>Attachment:</strong>{' '}
+              <a href="#" onClick={e => { e.preventDefault(); openAttachment(selected.id); }}>
+                {selected.attachment.name}
+              </a>{' '}
+              <small>({Math.round(selected.attachment.size / 1024)} KB)</small>
+            </p>
+          )}
+          <input ref={fileInput} type="file" accept="application/pdf" style={{ display: 'none' }}
+                 onChange={attach} />
           <div style={{ marginTop: '1rem' }}>
+            <button style={s.btn} onClick={() => fileInput.current.click()}>Attach file</button>
             <button style={s.btn} onClick={() =>
               setEditing({ id: selected.id, title: selected.title, body: selected.body })}>Edit</button>
             <button style={s.btn} onClick={() => remove(selected.id)}>Delete</button>
