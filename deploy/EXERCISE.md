@@ -1,18 +1,12 @@
-# Exercise 4 — "Attach file": one PDF per note, stored in a bucket
+# Exercise 5 — reachable only by the app
 
-**What changes in the code:**
-- Backend: `src/attachments.js` (writes and reads objects in the bucket named by `ATTACHMENTS_BUCKET`
-  with the API's own identity) and two routes in `src/index.js`: `POST /api/notes/:id/attachment`
-  (multipart field `file`, PDF only, up to 10 MB) and `GET /api/notes/:id/attachment` (streams the PDF).
-  Deleting a note deletes its file. New dependencies: `multer`, `@google-cloud/storage`.
-- Frontend: an **Attach file** button and the attachment link in `src/App.jsx`; `uploadAttachment`
-  and `attachmentUrl` in `src/api.js`.
-- The database row keeps the file's name, object path, size and type (columns already in the table).
+**What changes in the code:** nothing.
 
-**How it is deployed:** one private bucket in `europe-north1` (uniform access, versioning), the API's
-identity gets *Storage Object Admin* on that bucket only, and both services get new revisions.
+**How it is deployed:** the database gets a private address inside the project's `default` network
+(private services access), then loses its public address and the `0.0.0.0/0` authorized network.
+The API reaches the private address through Direct VPC egress (`DB_HOST` changes to the private IP).
+The bucket gets *public access prevention* enforced. The two Cloud Run services keep their public
+HTTPS URLs — they are the app.
 
-**Run it:** `bash deploy/exercise4.sh`. Console click-paths: course document, Exercise 4.
-
-**Check it:** attach a PDF to a note in the page; `curl -o out.pdf …/api/notes/1/attachment`;
-the direct file address `https://storage.googleapis.com/notely-attachments-…/notes/1/…` answers 403.
+**Run it:** `bash deploy/exercise5.sh`. Console click-paths and the "what to tell the lawyer"
+paragraph: course document, Exercise 5.
