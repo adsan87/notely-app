@@ -1,12 +1,11 @@
-# Exercise 5 — reachable only by the app
+# Exercise 6 — who may do what
 
 **What changes in the code:** nothing.
 
-**How it is deployed:** the database gets a private address inside the project's `default` network
-(private services access), then loses its public address and the `0.0.0.0/0` authorized network.
-The API reaches the private address through Direct VPC egress (`DB_HOST` changes to the private IP).
-The bucket gets *public access prevention* enforced. The two Cloud Run services keep their public
-HTTPS URLs — they are the app.
+**How it is deployed:** founders get the basic *Viewer* role (and the bucket's "convenience" grants
+are removed so they cannot read the PDFs); the IT person gets *Owner* in the console; the API runs as
+`notely-api@…` with two grants (the bucket, the secret) and the page as `notely-web@…` with none.
+The Compute Engine default service account loses its grants.
 
-**Run it:** `bash deploy/exercise5.sh`. Console click-paths and the "what to tell the lawyer"
-paragraph: course document, Exercise 5.
+**Run it:** `bash deploy/exercise6.sh`. Console click-paths and the honest "how hard was it"
+answer: course document, Exercise 6.
