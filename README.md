@@ -160,3 +160,24 @@ when `/health` cannot be reached.
 match the origin the frontend is served from.
 
 **Notes vanished** — expected. Storage is in memory and resets on restart.
+
+
+## Course branches (Cloud Computing Continuum, T630034401)
+
+One branch per exercise, each built on the previous one; `main` is the final state.
+Open `deploy/EXERCISE.md` on a branch to see what changed and how it is deployed;
+on GitHub, **Compare** two branches to see the code diff between exercises.
+
+| Branch | What is new |
+|---|---|
+| `exercise1` | Two VMs, no containers (`deploy/startup-*.sh`) |
+| `exercise2` | Dockerfiles; both parts on Cloud Run |
+| `exercise3` | Notes in Cloud SQL (PostgreSQL); local `docker-compose.yml` with a database |
+| `exercise4` | "Attach file": PDFs in a Cloud Storage bucket, through the backend |
+| `exercise5` | Private database address; bucket locked (no code change) |
+| `exercise6` | Least-privilege accounts and runtime identities (no code change) |
+| `exercise7` | Instance limits, uptime check, alerts (no code change) |
+| `exercise8` | Architecture review (no code change) |
+| `exercise9` | GitHub Actions workflow: deploy with one push |
+
+Never commit real project IDs, passwords or service-account keys: `deploy/00-env.sh` holds placeholders only.
