@@ -1,27 +1,32 @@
 # Notely
 
 A small notes app used as the running example for a cloud deployment exercise.
-An Express API on the backend, a React + Vite single-page app on the frontend.
+An Express API on the backend, a React + Vite single-page app on the frontend,
+served by a small Node server that is also the reverse proxy to the API.
 
 ```
 notely-app/
 ├── backend/          Express API (Node 20+, ES modules)
 │   └── src/
-│       ├── index.js      routes and middleware
-│       ├── repository.js storage (currently in-memory)
-│       └── instance.js   which instance is serving — see INSTANCE-IDENTITY.md
+│       ├── index.js        routes and middleware
+│       ├── repository.js   storage: in memory, or PostgreSQL when DB_HOST is set
+│       ├── attachments.js  PDF attachments in a Cloud Storage bucket
+│       └── instance.js     which instance is serving — see INSTANCE-IDENTITY.md
 ├── frontend/         React + Vite SPA
+│   ├── server.js            serves the built page and forwards /api and /health to the API
 │   ├── public/config.json   runtime config, read by the browser at load time
 │   └── src/
+├── deploy/           the gcloud script of this branch's exercise (see deploy/EXERCISE.md)
 └── docker-compose.yml
 ```
 
-Notes live in memory, so **they disappear when the backend restarts**. That is
-deliberate: it is the constraint that motivates moving to shared storage later.
+Without `DB_HOST` the notes live in memory, so **they disappear when the backend
+restarts**. That was the starting point of the course; with `DB_HOST` set they
+live in PostgreSQL.
 
 ## Requirements
 
-- Node.js 20 or newer (the backend is pinned to `>=20`, and was tested on 22)
+- Node.js 20 or newer (the backend is pinned to `>=20`; the images use Node 22)
 - npm
 - Docker and Docker Compose, only for the combined setup
 
@@ -51,8 +56,12 @@ curl http://localhost:3000/api/notes
 | Variable | Default | Purpose |
 |---|---|---|
 | `PORT` | `3000` | Port the API listens on |
-| `CORS_ORIGIN` | `*` | Allowed origin. Narrow this once the frontend has a fixed URL |
+| `CORS_ORIGIN` | `*` | Allowed origin. Not needed when the page proxies the API (same origin) |
 | `METADATA_TIMEOUT_MS` | `1000` | Timeout for the GCP metadata probe at startup |
+| `DB_HOST` | — | PostgreSQL host. When set, notes are stored in PostgreSQL instead of memory |
+| `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | `5432`, `notely`, —, `notely` | PostgreSQL connection |
+| `DB_SSL` | — | `true` to encrypt the connection to the database |
+| `ATTACHMENTS_BUCKET` | — | Cloud Storage bucket for the PDF attachments. Without it, the attachment routes answer 501 |
 
 ### Endpoints
 
@@ -63,11 +72,15 @@ curl http://localhost:3000/api/notes
 | `GET` | `/api/notes/:id` | Fetch one note (404 if missing) |
 | `POST` | `/api/notes` | Create a note. Body: `{ "title": "...", "body": "..." }` |
 | `PUT` | `/api/notes/:id` | Update a note |
-| `DELETE` | `/api/notes/:id` | Delete a note (204 on success) |
+| `DELETE` | `/api/notes/:id` | Delete a note and its attachment (204 on success) |
+| `POST` | `/api/notes/:id/attachment` | Attach a PDF (multipart field `file`, up to 10 MB) |
+| `GET` | `/api/notes/:id/attachment` | Download the note's PDF |
 | `GET` | `/api/boom` | Throws on purpose, to exercise error handling and alerting |
 
-`Notely.postman_collection.json` covers all of these. Its `protocol` / `host` /
-`port` variables default to `http` / `localhost` / `3000`.
+`Notely.postman_collection.json` covers the notes routes. Its `protocol` / `host` /
+`port` variables default to `http` / `localhost` / `3000`. On Cloud Run, from
+Exercise 5 on, the API is reachable only through the page: point Postman at the
+page's address (`https`, the `notely-web` host, port 443).
 
 ## Running the frontend on its own
 
@@ -77,35 +90,30 @@ npm install
 npm run dev
 ```
 
-The app opens on **http://localhost:5173**. In dev mode Vite proxies `/api` to
-`http://localhost:3000`, so **start the backend first** and leave
+The app opens on **http://localhost:5173**. In dev mode Vite proxies `/api` and
+`/health` to `http://localhost:3000`, so **start the backend first** and leave
 `public/config.json` with an empty `apiBaseUrl`.
 
-To serve a production build instead:
+To run the production build the way the container runs it:
 
 ```bash
-npm run build     # outputs to dist/
-npm run preview
+npm run build                                   # outputs to dist/
+API_URL=http://localhost:3000 npm run serve     # page and proxy on http://localhost:8080
 ```
 
-`npm run preview` does **not** proxy `/api`. Point the app at the API by setting
-`apiBaseUrl` in `public/config.json` before building, or by editing
-`dist/config.json` afterward:
-
-```json
-{ "apiBaseUrl": "http://localhost:3000", "frontendInstance": null }
-```
+`server.js` serves `dist/`, answers `/config.json` itself and forwards every
+request for `/api/*` and `/health` to `API_URL`, streaming bodies both ways (PDF
+uploads and downloads included).
 
 ### Frontend runtime config
 
 `config.json` is fetched by the browser at load time with `cache: no-store`,
-never baked into the bundle. That means one build can be pointed at any backend
-just by editing the file — no rebuild.
+never baked into the bundle.
 
 | Key | Purpose |
 |---|---|
-| `apiBaseUrl` | Base URL of the API. Empty string means same origin (dev proxy) |
-| `frontendInstance` | Label for whoever serves the static files. `null` when there is nothing to name |
+| `apiBaseUrl` | Base URL of the API. Empty string means same origin (the page's server, or Vite in dev mode, forwards the calls) |
+| `frontendInstance` | Label for whoever serves the page: the Cloud Run revision, or `local` |
 
 Both values show up in the footer of the running app, next to the backend
 instance that answered. See [INSTANCE-IDENTITY.md](INSTANCE-IDENTITY.md).
@@ -120,17 +128,13 @@ docker compose up --build
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:5173 |
-| Backend | http://localhost:3000 |
+| Frontend (page and proxy) | http://localhost:5173 |
+| Backend | not published: reachable only through the frontend |
+| PostgreSQL | not published: reachable only by the backend |
 
-Compose mounts `frontend/config.docker.json` over `public/config.json` inside the
-container, which points the browser at `http://localhost:3000`. The browser talks
-to the backend **published on the host**, not to the `backend` service name, so
-that URL is only knowable at deploy time — which is exactly why the config is
-loaded at runtime.
-
-`CORS_ORIGIN` is set to `http://localhost:5173` for the backend service, so the
-browser is allowed to call the API across origins.
+The browser talks to the frontend only. The frontend forwards `/api` and `/health`
+to `http://backend:3000` over the compose network, as the Cloud Run page does with
+the API's internal address. Check it with `curl http://localhost:5173/health`.
 
 To stop and clean up:
 
@@ -147,16 +151,20 @@ docker compose up --build --force-recreate
 ## Troubleshooting
 
 **`Cannot find package 'express'`** — dependencies were never installed. Run
-`npm install` inside `backend/`.
+`npm install` inside `backend/` (or `frontend/`).
 
 **`EADDRINUSE`** — something already holds the port. Either stop it or pick
 another one with `PORT=3099 npm start`.
 
 **Frontend loads but every request fails** — the backend is not running, or
-`apiBaseUrl` points somewhere else. Check the footer: it reads `no response`
-when `/health` cannot be reached.
+`API_URL` points somewhere else (the page's server logs `API unreachable` and
+answers 502). Check the footer: it reads `no response` when `/health` cannot be
+reached.
 
-**CORS errors in the browser console** — `CORS_ORIGIN` on the backend does not
-match the origin the frontend is served from.
+**The page on Cloud Run answers 404 for every `/api` call** — the API's ingress is
+`internal` and the request did not come through the VPC: Cloud Run refuses it with
+a 404 that leaves no log entry. The page must send its traffic through the VPC:
+Direct VPC egress with *all traffic*, and Private Google Access on that subnet
+(`deploy/EXERCISE.md`, Exercise 5).
 
-**Notes vanished** — expected. Storage is in memory and resets on restart.
+**Notes vanished** — expected without `DB_HOST`: storage is in memory and resets on restart.

@@ -1,5 +1,7 @@
 # Run the whole app on your laptop: PostgreSQL + backend + frontend.
 #   docker compose up --build      then open http://localhost:5173
+# As on Cloud Run since Exercise 5, the browser talks only to the frontend, which forwards /api and
+# /health to the backend over the compose network (API_URL). The backend publishes no port.
 services:
   db:
     image: postgres:16-alpine
@@ -16,8 +18,6 @@ services:
 
   backend:
     build: ./backend
-    ports:
-      - "3000:3000"
     environment:
       - PORT=3000
       - DB_HOST=db
@@ -31,9 +31,9 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "5173:8080"
     environment:
-      - PORT=5173
-      - API_BASE_URL=http://localhost:3000
+      - PORT=8080
+      - API_URL=http://backend:3000
     depends_on:
       - backend
