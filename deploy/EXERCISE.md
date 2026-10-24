@@ -1,32 +1,28 @@
-# Exercise 5 — only the page faces the internet
+# Exercise 6 — who may do what
 
-**What changes in the code:** the frontend. `frontend/server.js` replaces `serve`: it serves the built
-page and is a **reverse proxy** that forwards `/api/*` and `/health` to the API (`API_URL`), streaming
-bodies both ways, so PDF uploads and downloads work as before. The proxy is about thirty lines of Node's
-own `http`/`https` modules: read it, it is the whole idea. The browser now talks to one origin only:
-`config.json` says `apiBaseUrl: ""`. `frontend/Dockerfile` runs `node server.js`; `frontend/package.json`
-adds `express` (for the static files). `docker-compose.yml` mirrors the cloud: only the frontend
-publishes a port. The backend does not change.
+**What changes in the code:** nothing.
+
+**Before you run it — the founders' group.** Each founder signs in with their own Google account. Put
+both accounts in one Google group and give the roles to the group, not to the people:
+- Project in an organization: **IAM & Admin > Groups > Create** (needs Google Workspace or Cloud Identity).
+- Project without an organization (the usual case for a course project): create the group in Google
+  Groups (`groups.google.com`) and add the two accounts. Its address looks like `…@googlegroups.com`.
+Write the group's address in `FOUNDERS_GROUP` at the top of `deploy/exercise6.sh`.
 
 **How it is deployed:**
-- **a) The API is not on the internet.** `notely-api` gets ingress **internal**: Cloud Run refuses any
-  request that does not come through a VPC network of the project (404, no log entry).
-  `notely-web` sends all its outbound traffic into the `default` network (Direct VPC egress, *all
-  traffic*, subnet `default` in `europe-north1`), and that subnet gets **Private Google Access**, so the
-  page's calls to the API's `run.app` address travel inside the VPC and count as internal.
-- **b) The bucket is private.** The `allUsers` grant goes, *public access prevention* is enforced, and the
-  identity Cloud Run runs as (still the Compute Engine default service account) gets *Storage Object
-  Admin* on the bucket explicitly.
-- **c) The database has no public address.** Private services access gives it an address in the `default`
-  network; the public address and the `0.0.0.0/0` network go. The API reaches it with Direct VPC egress
-  (*private ranges only*). A firewall rule denies `tcp:5432` to the revisions tagged `notely-web`, so only
-  the API can even open a connection to it.
+- The **founders' group** gets four read-only roles on the project: *Cloud Run Viewer*, *Cloud SQL
+  Viewer*, *Storage Object Viewer* and *Storage Bucket Viewer* (Beta; it lets the Buckets page list the
+  bucket). They can open the services, the database and the bucket, and read the PDFs; they cannot
+  change or delete anything. Anyone given *Viewer* one by one before loses it.
+- The **API** runs as `notely-api@…` with two grants: *Storage Object Admin* on the bucket and *Secret
+  Manager Secret Accessor* on the database password. The **page** runs as `notely-web@…` with no grant.
+- The **broad grants go**: the Compute Engine default service account, which both services used until
+  now, loses its grants on the bucket and the secret, and the project *Editor* role.
+- You, the IT person, keep the *Owner* role you already have; nobody else gets it.
 
-**Run it:** `bash deploy/exercise5.sh`. Console click-paths and the "what to tell the lawyer"
-paragraph: course document, Exercise 5.
+**Run it:** `bash deploy/exercise6.sh`. Console click-paths and the honest "how hard was it"
+answer: course document, Exercise 6.
 
-**Check it:** `curl https://notely-api-…run.app/health` from your laptop answers **404**;
-`curl https://notely-web-…run.app/health` answers with the API's JSON (`"storage":"postgres"`);
-the file's direct address `https://storage.googleapis.com/notely-attachments-…/notes/1/…` answers **401 or
-403** (it answered 200 in Exercise 4);
-`gcloud sql instances describe notely-db --format='yaml(ipAddresses)'` lists only a `PRIVATE` address.
+**Check it:** as a founder, in a private window: the Cloud Run, Cloud SQL and Cloud Storage pages open,
+and every button that changes something is disabled or answers with a permission error.
+`Cloud Run > notely-api > Security` shows `notely-api@…`; the app still uploads and downloads a PDF.
