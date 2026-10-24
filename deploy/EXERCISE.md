@@ -1,28 +1,21 @@
-# Exercise 6 — who may do what
+# Exercise 7 — scale, watch, be told
 
-**What changes in the code:** nothing.
-
-**Before you run it — the founders' group.** Each founder signs in with their own Google account. Put
-both accounts in one Google group and give the roles to the group, not to the people:
-- Project in an organization: **IAM & Admin > Groups > Create** (needs Google Workspace or Cloud Identity).
-- Project without an organization (the usual case for a course project): create the group in Google
-  Groups (`groups.google.com`) and add the two accounts. Its address looks like `…@googlegroups.com`.
-Write the group's address in `FOUNDERS_GROUP` at the top of `deploy/exercise6.sh`.
+**What changes in the code:** nothing. `GET /api/boom` (already in the code) fails on purpose so you
+can prove the error alert fires.
 
 **How it is deployed:**
-- The **founders' group** gets four read-only roles on the project: *Cloud Run Viewer*, *Cloud SQL
-  Viewer*, *Storage Object Viewer* and *Storage Bucket Viewer* (Beta; it lets the Buckets page list the
-  bucket). They can open the services, the database and the bucket, and read the PDFs; they cannot
-  change or delete anything. Anyone given *Viewer* one by one before loses it.
-- The **API** runs as `notely-api@…` with two grants: *Storage Object Admin* on the bucket and *Secret
-  Manager Secret Accessor* on the database password. The **page** runs as `notely-web@…` with no grant.
-- The **broad grants go**: the Compute Engine default service account, which both services used until
-  now, loses its grants on the bucket and the secret, and the project *Editor* role.
-- You, the IT person, keep the *Owner* role you already have; nobody else gets it.
+- Both services scale out between **1 and 3 instances** (`--min-instances=1 --max-instances=3`): one
+  copy is always warm, three is the cost fuse. Scaling out is automatic on Cloud Run.
+- An **uptime check** calls `https://notely-web-…run.app/health` every minute. The page forwards it to
+  the API, which runs `SELECT 1`, so one probe covers the page, the proxy, the API and the database:
+  the path a user takes. (An uptime check of the same project could also reach the API's own `run.app`
+  address despite its internal ingress; the page's address is the one users see.)
+- Two alerts, in `deploy/alerts/`: *the app is down* (the uptime check fails for 5 minutes → IT and the
+  founder) and *users get 5xx errors* (more than 5 in 5 minutes at `notely-api` → IT).
+- Every `curl` goes to the page's address: since Exercise 5 the API answers nobody on the internet.
 
-**Run it:** `bash deploy/exercise6.sh`. Console click-paths and the honest "how hard was it"
-answer: course document, Exercise 6.
+**Run it:** create the two e-mail notification channels in the console first, paste their names
+into `deploy/exercise7.sh`, then `bash deploy/exercise7.sh`. Course document, Exercise 7.
 
-**Check it:** as a founder, in a private window: the Cloud Run, Cloud SQL and Cloud Storage pages open,
-and every button that changes something is disabled or answers with a permission error.
-`Cloud Run > notely-api > Security` shows `notely-api@…`; the app still uploads and downloads a PDF.
+**Check it:** `for i in $(seq 8); do curl -s -o /dev/null -w '%{http_code}\n' https://notely-web-…run.app/api/boom; done`
+prints `500` eight times and the error e-mail arrives; `Monitoring > Uptime checks` shows the check passing.
