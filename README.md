@@ -168,3 +168,24 @@ Direct VPC egress with *all traffic*, and Private Google Access on that subnet
 (`deploy/EXERCISE.md`, Exercise 5).
 
 **Notes vanished** — expected without `DB_HOST`: storage is in memory and resets on restart.
+
+
+## Course branches (Cloud Computing Continuum, T630034401)
+
+One branch per exercise, each built on the previous one; `main` is the final state.
+Open `deploy/EXERCISE.md` on a branch to see what changed and how it is deployed;
+on GitHub, **Compare** two branches to see the code diff between exercises.
+
+| Branch | What is new |
+|---|---|
+| `exercise1` | Two VMs, no containers (`deploy/startup-*.sh`) |
+| `exercise2` | Dockerfiles; both parts on Cloud Run (1 to 2 instances each) |
+| `exercise3` | Notes in Cloud SQL (PostgreSQL, Enterprise edition); local `docker-compose.yml` with a database |
+| `exercise4` | "Attach file": PDFs in a Cloud Storage bucket, through the backend; the bucket is still exposed |
+| `exercise5` | The page becomes the API's reverse proxy (`frontend/server.js`); internal API, private database, private bucket |
+| `exercise6` | Least privilege: a read-only group for the founders, one identity per service (no code change) |
+| `exercise7` | 1 to 3 instances per service, an uptime check through the page, two alerts (no code change) |
+| `exercise8` | Architecture review (no code change) |
+| `exercise9` | GitHub Actions workflow: deploy with one push |
+
+Never commit real project IDs, passwords or service-account keys: `deploy/00-env.sh` holds placeholders only.
