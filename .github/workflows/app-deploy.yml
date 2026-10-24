@@ -1,0 +1,35 @@
+# Exercise 9 - build both images, push them, deploy a new revision of each service (keyless auth).
+# Repository VARIABLES: GCP_PROJECT_ID, GCP_REGION, GCP_WIF_PROVIDER, GCP_SERVICE_ACCOUNT
+name: app-deploy
+on:
+  push:
+    branches: [main]
+    paths: ["backend/**", "frontend/**", ".github/workflows/app-deploy.yml"]
+  workflow_dispatch: {}
+permissions:
+  contents: read
+  id-token: write
+env:
+  REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/notely
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev --quiet
+      - name: Build and push both images (tag = commit SHA)
+        run: |
+          docker build --platform linux/amd64 -t "$REGISTRY/notely-api:$GITHUB_SHA" backend
+          docker build --platform linux/amd64 -t "$REGISTRY/notely-web:$GITHUB_SHA" frontend
+          docker push "$REGISTRY/notely-api:$GITHUB_SHA"
+          docker push "$REGISTRY/notely-web:$GITHUB_SHA"
+      # Only the image changes; env vars, secrets, VPC egress and identity are kept from the current revision.
+      - name: Deploy new revisions
+        run: |
+          gcloud run deploy notely-api --region ${{ vars.GCP_REGION }} --image "$REGISTRY/notely-api:$GITHUB_SHA" --quiet
+          gcloud run deploy notely-web --region ${{ vars.GCP_REGION }} --image "$REGISTRY/notely-web:$GITHUB_SHA" --quiet
